@@ -22,7 +22,7 @@ private class Skeleton(layers: List[Int])(implicit activation: ActivationFunctio
       override def calculate(x: DenseVector[Double]): (Double, DenseVector[Double]) = diff(x)
     }
 //    TODO: add a way to configure minimization options.
-    val minimizer = new LBFGS[DenseVector[Double]](maxIter=500, m=7)
+    val minimizer = new LBFGS[DenseVector[Double]](maxIter = 500, m = 7, tolerance = 1E-12)
     val optimumWeights = minimizer.minimize(diffFunction,
       perceptrons map (_.weight) map (_.toDenseVector) reduce (DenseVector.vertcat(_, _)))
     new Predictor(this, activations(optimumWeights))
