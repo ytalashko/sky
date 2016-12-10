@@ -96,5 +96,5 @@ object NeuralNetwork {
 
 //  TODO: add a way to provide custom Activation Functions
   def apply(inSize: Int)(sizes: Int*)(outSize: Int): Trainable =
-    new Skeleton((inSize :: sizes.toList) :+ outSize)
+    new Skeleton(inSize :: (sizes :+ outSize).toList)
 }
