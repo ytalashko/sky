@@ -3,10 +3,10 @@ package com.dark.sky.nn
 import breeze.linalg.{DenseMatrix, rand}
 import breeze.numerics.sqrt
 
-class LayerChain(inLayerSize: Int, outLayerSize: Int)(implicit activation: ActivationFunction) {
-  private val epsilon = LayerChain.SQRT6 / sqrt(inLayerSize + outLayerSize)
+class Perceptron(inSize: Int, outSize: Int)(implicit activation: ActivationFunction) {
+  private val epsilon = Perceptron.SQRT6 / sqrt(inSize + outSize)
 
-  lazy val weights: DenseMatrix[Double] = LayerChain.initWeights(inLayerSize, outLayerSize, epsilon)
+  lazy val weight: DenseMatrix[Double] = Perceptron.initWeight(inSize, outSize, epsilon)
 
   def apply(weight: DenseMatrix[Double]): Activation = new Activation {
     private val weightT: DenseMatrix[Double] = weight.t
@@ -16,10 +16,10 @@ class LayerChain(inLayerSize: Int, outLayerSize: Int)(implicit activation: Activ
   }
 }
 
-private object LayerChain {
+private object Perceptron {
   private val SQRT6: Double = sqrt(6)
 
-  private def initWeights(inSize: Int, outSize: Int, epsilon: Double): DenseMatrix[Double] = {
+  private def initWeight(inSize: Int, outSize: Int, epsilon: Double): DenseMatrix[Double] = {
     DenseMatrix.fill(outSize, inSize + 1)(rand() * 2 * epsilon - epsilon)
   }
 }

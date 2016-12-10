@@ -13,8 +13,8 @@ trait NeuralNetwork extends Trainable {
 }
 
 private class Skeleton(layers: List[Int])(implicit activation: ActivationFunction) extends Trainable {
-  private val chains: List[LayerChain] =
-    layers zip layers.tail map (chain => new LayerChain(chain._1, chain._2))
+  private val perceptrons: List[Perceptron] =
+    layers zip layers.tail map (chain => new Perceptron(chain._1, chain._2))
 
   override def train(x: DenseMatrix[Double], y: DenseMatrix[Int], lambda: Double): NeuralNetwork = {
     val diff: DenseVector[Double] => (Double, DenseVector[Double]) = differentiable(x, y, lambda)
@@ -24,7 +24,7 @@ private class Skeleton(layers: List[Int])(implicit activation: ActivationFunctio
 //    TODO: add a way to configure minimization options.
     val minimizer = new LBFGS[DenseVector[Double]](maxIter=500, m=7)
     val optimumWeights = minimizer.minimize(diffFunction,
-      chains map (_.weights) map (_.toDenseVector) reduce (DenseVector.vertcat(_, _)))
+      perceptrons map (_.weight) map (_.toDenseVector) reduce (DenseVector.vertcat(_, _)))
     new Predictor(this, activations(optimumWeights))
   }
 
@@ -60,7 +60,7 @@ private class Skeleton(layers: List[Int])(implicit activation: ActivationFunctio
   }
 
   private def activations(weights: DenseVector[Double]): List[Activation] = {
-    chains zip reshape(weights) map (pair => pair._1(pair._2))
+    perceptrons zip reshape(weights) map (pair => pair._1(pair._2))
   }
 
   private def reshape(weights: DenseVector[Double]): List[DenseMatrix[Double]] = {
