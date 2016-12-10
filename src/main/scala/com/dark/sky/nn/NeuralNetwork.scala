@@ -43,20 +43,18 @@ private class Skeleton(layers: List[Int])(implicit activation: ActivationFunctio
     val yVec = (yMatrix.toDenseVector map (_.toDouble)).t
 
     val m = y.rows
-    val regWeights = weights map Skeleton.recallBias
-    val regWeightsVec = weights map (_(::, 1 to -1)) map (_.toDenseVector) reduce (DenseVector.vertcat(_, _))
+    val regWeights = weights map (_(::, 1 to -1))
+    val regWeightsVec = regWeights map (_.toDenseVector) reduce (DenseVector.vertcat(_, _))
     val j = -1.0 / m * (yVec * log(aVec) + ((-yVec + 1.0) * log(-aVec + 1.0))) + lambda / (2 * m) * (regWeightsVec.t * regWeightsVec)
 
-    val reversedWeights = weights.reverse
-    val gradients = zaPairs.slice(1, zaPairs.size - 1).foldLeft(List(zaPairs.head._2 - (yMatrix map (_.toDouble)))) ((deltas, za) => {
-      val i = deltas.size
-      val delta = deltas.head * reversedWeights(i - 1)(::, 1 to -1) :* activation.gradient(za._1)
-      delta :: deltas
-    }).zipWithIndex zip regWeights map (deltaWithIndex => {
-      (deltaWithIndex._1._1.t * zaPairs(zaPairs.size - 1 - deltaWithIndex._1._2)._2 + (deltaWithIndex._2 :* lambda)) :/ m.toDouble
-    })
+    val zwPairs = zaPairs slice (1, zaPairs.size - 1) map (_._1) zip regWeights.reverse
+    val gradient = zwPairs.foldLeft(List(zaPairs.head._2 - (yMatrix map (_.toDouble)))) ((deltas, zw) => {
+      (deltas.head * zw._2 :* activation.gradient(zw._1)) :: deltas
+    }).zipWithIndex zip regWeights map (dw => {
+      (dw._1._1.t * zaPairs(zaPairs.size - 1 - dw._1._2)._2 + Skeleton.withZeroBias(dw._2 :* lambda)) :/ m.toDouble
+    }) map (_.toDenseVector) reduce (DenseVector.vertcat(_, _))
 
-    (j, gradients map (_.toDenseVector) reduce (DenseVector.vertcat(_, _)))
+    j -> gradient
   }
 
   private def activations(weights: DenseVector[Double]): List[Activation] = {
@@ -86,9 +84,9 @@ private object Skeleton {
     r
   }
 
-  private def recallBias(weight: DenseMatrix[Double]): DenseMatrix[Double] = {
-    val r = DenseMatrix.zeros[Double](weight.rows, weight.cols)
-    r(::, 1 to -1) := weight(::, 1 to -1)
+  private def withZeroBias(x: DenseMatrix[Double]): DenseMatrix[Double] = {
+    val r = DenseMatrix.zeros[Double](x.rows, x.cols + 1)
+    r(::, 1 to -1) := x
     r
   }
 }
