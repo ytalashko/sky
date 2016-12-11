@@ -17,44 +17,51 @@ private class Skeleton(layers: List[Int])(implicit activation: ActivationFunctio
     layers zip layers.tail map (chain => new Perceptron(chain._1, chain._2))
 
   override def train(x: DenseMatrix[Double], y: DenseMatrix[Int], lambda: Double): NeuralNetwork = {
-    val diff: DenseVector[Double] => (Double, DenseVector[Double]) = differentiable(x, y, lambda)
-    val diffFunction: DiffFunction[DenseVector[Double]] = new DiffFunction[DenseVector[Double]] {
-      override def calculate(x: DenseVector[Double]): (Double, DenseVector[Double]) = diff(x)
+    val costFunction = new DiffFunction[DenseVector[Double]] {
+      private val cost = backpropagation(x, y, lambda)
+
+      override def calculate(x: DenseVector[Double]): (Double, DenseVector[Double]) = cost(x)
     }
+
 //    TODO: add a way to configure minimization options.
     val minimizer = new LBFGS[DenseVector[Double]](maxIter = 500, m = 7, tolerance = 1E-12)
-    val optimumWeights = minimizer.minimize(diffFunction,
+    val optimumWeights = minimizer.minimize(costFunction,
       perceptrons map (_.weight) map (_.toDenseVector) reduce (DenseVector.vertcat(_, _)))
     new Predictor(this, activations(optimumWeights))
   }
 
-  private def differentiable(x: DenseMatrix[Double], y: DenseMatrix[Int], lambda: Double)
-                            (weightsVec: DenseVector[Double]): (Double, DenseVector[Double]) = {
-    val weights = reshape(weightsVec)
-
-    val zaPairs = weights.foldLeft(List(x -> Skeleton.withBias(x))) ((zaPairs, weight) => {
-      val z = zaPairs.head._2 * weight.t
-      val a = activation(z)
-      z -> (if (zaPairs.size == weights.size) a else Skeleton.withBias(a)) :: zaPairs
-    })
-    val aVec = zaPairs.head._2.toDenseVector
-
-    val yMatrix = DenseMatrix.tabulate[Int](y.rows, layers.last) ((r, c) => if (y.valueAt(r, 0) == c) 1 else 0)
-    val yVec = (yMatrix.toDenseVector map (_.toDouble)).t
-
+  private def backpropagation(x: DenseMatrix[Double], y: DenseMatrix[Int],
+                              lambda: Double): DenseVector[Double] => (Double, DenseVector[Double]) = {
     val m = y.rows
-    val regWeights = weights map (_(::, 1 to -1))
-    val regWeightsVec = regWeights map (_.toDenseVector) reduce (DenseVector.vertcat(_, _))
-    val j = -1.0 / m * (yVec * log(aVec) + ((-yVec + 1.0) * log(-aVec + 1.0))) + lambda / (2 * m) * (regWeightsVec.t * regWeightsVec)
 
-    val zwPairs = zaPairs slice (1, zaPairs.size - 1) map (_._1) zip regWeights.reverse
-    val gradient = zwPairs.foldLeft(List(zaPairs.head._2 - (yMatrix map (_.toDouble)))) ((deltas, zw) => {
-      (deltas.head * zw._2 :* activation.gradient(zw._1)) :: deltas
-    }).zipWithIndex zip regWeights map (dw => {
-      (dw._1._1.t * zaPairs(zaPairs.size - 1 - dw._1._2)._2 + Skeleton.withZeroBias(dw._2 :* lambda)) :/ m.toDouble
-    }) map (_.toDenseVector) reduce (DenseVector.vertcat(_, _))
+    val yExpanded = DenseMatrix.tabulate[Int](m, layers.last) ((r, c) => if (y.valueAt(r, 0) == c) 1 else 0)
+    val yReal = yExpanded map (_.toDouble)
+    val yVec = yReal.toDenseVector.t
 
-    j -> gradient
+    shapedWeights => {
+      val weights = reshape(shapedWeights)
+
+      val zaPairs = weights.foldLeft(List(x -> Skeleton.withBias(x)))((zaPairs, weight) => {
+        val z = zaPairs.head._2 * weight.t
+        val a = activation(z)
+        z -> (if (zaPairs.size == weights.size) a else Skeleton.withBias(a)) :: zaPairs
+      })
+      val a = zaPairs.head._2
+      val aVec = a.toDenseVector
+
+      val regWeights = weights map (_(::, 1 to -1))
+      val rwVec = regWeights map (_.toDenseVector) reduce (DenseVector.vertcat(_, _))
+      val j = -1.0 / m * (yVec * log(aVec) + ((-yVec + 1.0) * log(-aVec + 1.0))) + lambda / (2 * m) * (rwVec.t * rwVec)
+
+      val zwPairs = zaPairs slice(1, zaPairs.size - 1) map (_._1) zip regWeights.reverse
+      val gradient = zwPairs.foldLeft(List(a - yReal))((deltas, zw) => {
+        (deltas.head * zw._2 :* activation.gradient(zw._1)) :: deltas
+      }).zipWithIndex zip regWeights map (dw => {
+        (dw._1._1.t * zaPairs(zaPairs.size - 1 - dw._1._2)._2 + Skeleton.withZeroBias(dw._2 :* lambda)) :/ m.toDouble
+      }) map (_.toDenseVector) reduce (DenseVector.vertcat(_, _))
+
+      j -> gradient
+    }
   }
 
   private def activations(weights: DenseVector[Double]): List[Activation] = {
