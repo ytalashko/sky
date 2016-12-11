@@ -13,16 +13,18 @@ object Demo extends App {
   val nnAccuracy = checkAccuracy(nn, cv)
   println(s"Training accuracy without regularization: ${checkAccuracy(nn, t)}")
   println(s"Cross Validation accuracy without regularization: $nnAccuracy")
+  println(s"Test accuracy without regularization: ${checkAccuracy(nn, test)}")
 
   val (mostAccurate, lambda, accuracy) = lambdas.foldLeft (nn, 0.0, nnAccuracy) ((current, lambda) => {
     val newNN = current._1.train(t._1, t._2, lambda)
     val accuracy = checkAccuracy(newNN, cv)
     println(s"Training accuracy with lambda $lambda: ${checkAccuracy(newNN, t)}")
     println(s"Cross Validation accuracy with lambda $lambda: $accuracy")
+    println(s"Test accuracy with lambda $lambda: ${checkAccuracy(newNN, test)}")
     if (accuracy < current._3) current else (newNN, lambda, accuracy)
   })
   println(s"Cross Validation accuracy of most accurate (lambda is $lambda): $accuracy")
-  println(s"Test accuracy of most accurate: ${checkAccuracy(nn, test)}")
+  println(s"Test accuracy of most accurate: ${checkAccuracy(mostAccurate, test)}")
 
   private def lambdas: List[Double] =
     Stream.iterate(0.01, 7)(_ * sqrt(10)).toList
